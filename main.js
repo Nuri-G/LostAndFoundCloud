@@ -73,6 +73,38 @@ function checkItemMatch(item, otherItem) {
     return NAME_SIMILARITY_WEIGHT * nameSim + LOCATION_SIMILARITY_WEIGHT * locationSim + TIME_SIMILARITY_WEIGHT * timeSim;
 }
 
+async function deleteMatch(match) {
+    let lostItem = new LostItem();
+    lostItem.id = match.get(KEY_LOST_ITEM).id;
+    let lostItemPromise = lostItem.fetch({ useMasterKey : true });
+    let foundItem = new FoundItem();
+    foundItem.id = match.get(KEY_FOUND_ITEM).id;
+    let foundItemPromise = foundItem.fetch({ useMasterKey : true });
+    await lostItemPromise;
+    let lostPossibleMatches = lostItem.get(KEY_POSSIBLE_MATCHES);
+    await foundItemPromise;
+    let foundPossibleMatches = foundItem.get(KEY_POSSIBLE_MATCHES);
+    lostPossibleMatches = lostPossibleMatches.filter(val => val !== match.id);
+    foundPossibleMatches = foundPossibleMatches.filter(val => val !== match.id);
+    lostItem.set(KEY_POSSIBLE_MATCHES, lostPossibleMatches);
+    foundItem.set(KEY_POSSIBLE_MATCHES, foundPossibleMatches);
+    match.destroy();
+    lostItem.save(null, { useMasterKey : true });
+    foundItem.save(null, { useMasterKey : true });
+}
+
+async function deleteMatchFromId(matchId) {
+    console.log("Deleting match from id: " + matchId);
+    let match = new Match();
+    match.id = matchId;
+    try {
+        await match.fetch();
+        deleteMatch(match);
+    } catch(error) {
+        console.log("Error deleting match: " + error.message);
+    }
+}
+
 async function setMatches(item) {
     // Matches will be set here.
 }
