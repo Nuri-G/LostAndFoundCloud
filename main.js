@@ -91,6 +91,8 @@ async function findMatch(lostItem, foundItem) {
     return new Match();
 }
 
+// Deletes the match object and removes the match object id from the
+// possible matches in the connected lost and found objects.
 async function deleteMatch(match) {
     let lostItem = new LostItem();
     lostItem.id = match.get(KEY_LOST_ITEM).id;
