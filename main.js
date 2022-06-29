@@ -73,6 +73,24 @@ function checkItemMatch(item, otherItem) {
     return NAME_SIMILARITY_WEIGHT * nameSim + LOCATION_SIMILARITY_WEIGHT * locationSim + TIME_SIMILARITY_WEIGHT * timeSim;
 }
 
+async function findMatch(lostItem, foundItem) {
+    let matches = lostItem.get(KEY_POSSIBLE_MATCHES);
+    for(let matchId of matches) {
+        let match = new Match();
+        match.id = matchId;
+        try {
+            await match.fetch();
+            if(match.get(KEY_LOST_ITEM).id === lostItem.id && match.get(KEY_FOUND_ITEM).id === foundItem.id) {
+                console.log("Exsisting match found.");
+                return match;
+            }
+        } catch (error) {
+            console.log("Error getting exsisting match: " + error.message);
+        }
+    }
+    return new Match();
+}
+
 async function deleteMatch(match) {
     let lostItem = new LostItem();
     lostItem.id = match.get(KEY_LOST_ITEM).id;
@@ -106,7 +124,58 @@ async function deleteMatchFromId(matchId) {
 }
 
 async function setMatches(item) {
-    // Matches will be set here.
+    console.log("Setting matches for " + JSON.stringify(item));
+    let query;
+    if(item instanceof LostItem) {
+        query = new Parse.Query("FoundItem");
+    } else if(item instanceof FoundItem) {
+        query = new Parse.Query("LostItem");
+    }
+    
+    let results = await query.find({ useMasterKey : true });
+
+    let initialPossibleMatches = item.get(KEY_POSSIBLE_MATCHES);
+    let possibleMatches = [];
+
+    for(let i = 0; i < results.length; i++) {
+        const otherItem = results[i];
+
+        let matchPromise = findMatch(item, otherItem);
+        let similarity = checkItemMatch(item, otherItem);
+        let match = await matchPromise;
+        if(similarity > 0.7) {
+            if(item instanceof LostItem) {
+                match.set('lostItem', item);
+                match.set('foundItem', otherItem);
+            } else if(item instanceof FoundItem) {
+                match.set('lostItem', otherItem);
+                match.set('foundItem', item);
+            }
+            
+            match.set('matchScore', similarity);
+            let matchPromise = match.save(null, { useMasterKey : true });
+            
+            let otherPossibleMatches = otherItem.get(KEY_POSSIBLE_MATCHES);
+
+            await matchPromise;
+
+            possibleMatches.push(match.id);
+            if(!otherPossibleMatches.includes(match.id)) {
+                otherPossibleMatches.push(match.id);
+            }
+
+            otherItem.set(KEY_POSSIBLE_MATCHES, otherPossibleMatches);
+            otherItem.save(null, { useMasterKey : true });
+        }
+    }
+
+    initialPossibleMatches.forEach(matchId => {
+        if(!possibleMatches.includes(matchId)) {
+            deleteMatchFromId(matchId);
+        }
+    });
+    item.set(KEY_POSSIBLE_MATCHES, possibleMatches);
+    item.save(null, { useMasterKey : true });
 }
 
 Parse.Cloud.define("updateMatches", async (request) => {
