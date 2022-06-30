@@ -10,6 +10,9 @@ const KEY_FOUND_ITEM = "foundItem";
 const KEY_DISTANCE_MILES = "distanceMiles";
 const KEY_LOST_BY = "lostBy";
 const KEY_FOUND_BY = "foundBY";
+const KEY_ITEM_DETAILS = "itemDetails";
+const KEY_VERIFIED = "verified";
+const KEY_QUIZ_FAILS = "quizFails";
 
 const LostItem = Parse.Object.extend("LostItem");
 const FoundItem = Parse.Object.extend("FoundItem");
@@ -263,4 +266,52 @@ Parse.Cloud.beforeDelete("FoundItem", (request) => {
         .catch((error) => {
             console.error("Error finding related matches " + error.code + ": " + error.message);
     });
+});
+
+async function validateQuiz(request) {
+    let match = new Match();
+    match.id = request.params.matchId;
+    await match.fetch({ useMasterKey : true });
+
+    console.log("MATCH IS " + JSON.stringify(match));
+
+    let foundItem = new FoundItem();
+    foundItem.id = match.get(KEY_FOUND_ITEM).id;
+    await foundItem.fetch({ useMasterKey : true });
+    let answers = foundItem.get(KEY_ITEM_DETAILS);
+
+    console.log("ANSWERS: " + JSON.stringify(answers));
+
+    let totalScore = 0;
+    let itemCount = 0;
+
+    for (const [key, value] of Object.entries(answers)) {
+        itemCount++;
+        if(value === request.params[key]) {
+            totalScore++;
+        }
+    }
+
+    let scoreProportion = totalScore / itemCount;
+
+    if(scoreProportion > 0.7) {
+        console.log("Quiz verified for match " + match.id)
+        match.set(KEY_VERIFIED, true);
+        match.save(null, { useMasterKey : true });
+    } else {
+        console.log("FAILED");
+        let quizFails = foundItem.get(KEY_QUIZ_FAILS);
+        quizFails.push(request.user.id);
+        foundItem.set(KEY_QUIZ_FAILS, quizFails);
+        foundItem.save(null, { useMasterKey : true });
+    }
+}
+
+Parse.Cloud.define("submitQuiz", async (request) => {
+    try {
+        await validateQuiz(request);
+    } catch(error) {
+        console.log("Error verifying quiz: " + error.message);
+        console.log(error.stack)
+    }
 });
