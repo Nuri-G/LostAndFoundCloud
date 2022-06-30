@@ -118,21 +118,27 @@ async function deleteMatch(match) {
     foundItem.id = match.get(KEY_FOUND_ITEM).id;
     let foundItemPromise = foundItem.fetch({ useMasterKey : true });
 
-    await lostItemPromise;
-    let lostPossibleMatches = lostItem.get(KEY_POSSIBLE_MATCHES);
-    lostPossibleMatches = lostPossibleMatches.filter(val => val !== match.id);
+    try {
+        await lostItemPromise;
+        let lostPossibleMatches = lostItem.get(KEY_POSSIBLE_MATCHES);
+        lostPossibleMatches = lostPossibleMatches.filter(val => val !== match.id);
+        lostItem.set(KEY_POSSIBLE_MATCHES, lostPossibleMatches);
+        lostItem.save(null, { useMasterKey : true });
+    } catch(error) {
+        console.log(error.message);
+    }
 
-    await foundItemPromise;
-    let foundPossibleMatches = foundItem.get(KEY_POSSIBLE_MATCHES);
-    foundPossibleMatches = foundPossibleMatches.filter(val => val !== match.id);
-
-    lostItem.set(KEY_POSSIBLE_MATCHES, lostPossibleMatches);
-    foundItem.set(KEY_POSSIBLE_MATCHES, foundPossibleMatches);
+    try {
+        await foundItemPromise;
+        let foundPossibleMatches = foundItem.get(KEY_POSSIBLE_MATCHES);
+        foundPossibleMatches = foundPossibleMatches.filter(val => val !== match.id);
+        foundItem.set(KEY_POSSIBLE_MATCHES, foundPossibleMatches);
+        foundItem.save(null, { useMasterKey : true });
+    } catch(error) {
+        console.log(error.message);
+    }
 
     match.destroy();
-
-    lostItem.save(null, { useMasterKey : true });
-    foundItem.save(null, { useMasterKey : true });
 }
 
 async function deleteMatchFromId(matchId) {
@@ -229,4 +235,32 @@ Parse.Cloud.define("updateMatches", async (request) => {
         console.log("Error setting matches: " + error.message);
         console.log("Trace: " + error.stack);
     }
+});
+
+Parse.Cloud.beforeDelete("LostItem", (request) => {
+    const query = new Parse.Query("Match");
+    query.equalTo(KEY_LOST_ITEM, request.object);
+    query.find()
+        .then(async (matches) => {
+            matches.forEach(match => {
+                deleteMatch(match);
+            });
+        })
+        .catch((error) => {
+            console.error("Error finding related matches " + error.code + ": " + error.message);
+    });
+});
+
+Parse.Cloud.beforeDelete("FoundItem", (request) => {
+    const query = new Parse.Query("Match");
+    query.equalTo(KEY_FOUND_ITEM, request.object);
+    query.find()
+        .then(async (matches) => {
+            matches.forEach(match => {
+                deleteMatch(match);
+            });
+        })
+        .catch((error) => {
+            console.error("Error finding related matches " + error.code + ": " + error.message);
+    });
 });
