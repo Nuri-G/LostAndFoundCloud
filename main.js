@@ -166,6 +166,7 @@ async function setMatches(item) {
         let matchPromise = findMatch(item, otherItem);
         let similarity = checkItemMatch(item, otherItem);
         let match = await matchPromise;
+        
         if(similarity > 0.7) {
             if(item instanceof LostItem) {
                 match.set('lostItem', item);
@@ -176,8 +177,11 @@ async function setMatches(item) {
             }
             
             match.set('matchScore', similarity);
+            let distanceMiles = calculateDistanceMiles(lostItem, foundItem);
+            match.set(KEY_DISTANCE_MILES, distanceMiles);
+
             let matchPromise = match.save(null, { useMasterKey : true });
-            
+
             let otherPossibleMatches = otherItem.get(KEY_POSSIBLE_MATCHES);
 
             await matchPromise;
