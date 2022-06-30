@@ -7,24 +7,30 @@ const KEY_TIME_FOUND = "timeFound";
 const KEY_TIME_LOST = "timeLost";
 const KEY_LOST_ITEM = "lostItem";
 const KEY_FOUND_ITEM = "foundItem";
+const KEY_DISTANCE_MILES = "distanceMiles";
 
 const LostItem = Parse.Object.extend("LostItem");
 const FoundItem = Parse.Object.extend("FoundItem");
 const Match = Parse.Object.extend("Match");
 
-//Returns value from 0 to 1 depending on how close to 0 the distance is.
-function locationSimilarity(item, otherItem) {
-    const MAX_DISTANCE = 50.0;
-    let distanceMiles = item.get(KEY_ITEM_LOCATION).milesTo(otherItem.get(KEY_ITEM_LOCATION));
+function calculateDistanceMiles(item, otherItem) {
+    return item.get(KEY_ITEM_LOCATION).milesTo(otherItem.get(KEY_ITEM_LOCATION));
+}
 
-    if(distanceMiles > MAX_DISTANCE) {
+//Returns value from 0 to 1 depending on how close to 0 the distance is.
+function calculateLocationSimilarity(item, otherItem) {
+    const MAX_DISTANCE = 50.0;
+
+    let distanceMi = calculateDistanceMiles(item, otherItem);
+
+    if(distanceMi > MAX_DISTANCE) {
         return 0;
     } else {
-        return (MAX_DISTANCE - distanceMiles) / MAX_DISTANCE;
+        return (MAX_DISTANCE - distanceMi) / MAX_DISTANCE;
     }
 }
 
-function nameSimilarity(item, otherItem) {
+function calculateNameSimilarity(item, otherItem) {
     let itemName = item.get(KEY_ITEM_NAME).toLowerCase();
     let otherName = otherItem.get(KEY_ITEM_NAME).toLowerCase();
 
@@ -34,7 +40,7 @@ function nameSimilarity(item, otherItem) {
     return (longerLength - similarity) / longerLength;
 }
 
-function timeSimilarity(item, otherItem) {
+function calculateTimeSimilarity(item, otherItem) {
     let lostItem;
     let foundItem;
     if(item.className == 'LostItem') {
@@ -66,26 +72,34 @@ function checkItemMatch(item, otherItem) {
     const LOCATION_SIMILARITY_WEIGHT = 0.3;
     const TIME_SIMILARITY_WEIGHT = 0.3;
 
-    let nameSim = nameSimilarity(item, otherItem);
-    let locationSim = locationSimilarity(item, otherItem);
-    let timeSim = timeSimilarity(item, otherItem);
+    let nameSimilarity = calculateNameSimilarity(item, otherItem);
+    let locationSimilarity = calculateLocationSimilarity(item, otherItem);
+    let timeSimilarity = calculateTimeSimilarity(item, otherItem);
 
-    return NAME_SIMILARITY_WEIGHT * nameSim + LOCATION_SIMILARITY_WEIGHT * locationSim + TIME_SIMILARITY_WEIGHT * timeSim;
+    return NAME_SIMILARITY_WEIGHT * nameSimilarity + LOCATION_SIMILARITY_WEIGHT * locationSimilarity + TIME_SIMILARITY_WEIGHT * timeSimilarity;
 }
 
-async function findMatch(lostItem, foundItem) {
+async function findMatch(item, otherItem) {
+    let lostItem;
+    let foundItem;
+
+    if(item.className == 'LostItem') {
+        lostItem = item
+        foundItem = otherItem;
+    } else {
+        lostItem = otherItem;
+        foundItem = item;
+    }
+
     let matches = lostItem.get(KEY_POSSIBLE_MATCHES);
     for(let matchId of matches) {
         let match = new Match();
         match.id = matchId;
-        try {
-            await match.fetch();
-            if(match.get(KEY_LOST_ITEM).id === lostItem.id && match.get(KEY_FOUND_ITEM).id === foundItem.id) {
-                console.log("Exsisting match found.");
-                return match;
-            }
-        } catch (error) {
-            console.log("Error getting exsisting match: " + error.message);
+        await match.fetch();
+
+        if(match.get(KEY_LOST_ITEM).id === lostItem.id && match.get(KEY_FOUND_ITEM).id === foundItem.id) {
+            console.log("Exsisting match found.");
+            return match;
         }
     }
     return new Match();
@@ -97,18 +111,24 @@ async function deleteMatch(match) {
     let lostItem = new LostItem();
     lostItem.id = match.get(KEY_LOST_ITEM).id;
     let lostItemPromise = lostItem.fetch({ useMasterKey : true });
+
     let foundItem = new FoundItem();
     foundItem.id = match.get(KEY_FOUND_ITEM).id;
     let foundItemPromise = foundItem.fetch({ useMasterKey : true });
+
     await lostItemPromise;
     let lostPossibleMatches = lostItem.get(KEY_POSSIBLE_MATCHES);
+    lostPossibleMatches = lostPossibleMatches.filter(val => val !== match.id);
+
     await foundItemPromise;
     let foundPossibleMatches = foundItem.get(KEY_POSSIBLE_MATCHES);
-    lostPossibleMatches = lostPossibleMatches.filter(val => val !== match.id);
     foundPossibleMatches = foundPossibleMatches.filter(val => val !== match.id);
+
     lostItem.set(KEY_POSSIBLE_MATCHES, lostPossibleMatches);
     foundItem.set(KEY_POSSIBLE_MATCHES, foundPossibleMatches);
+
     match.destroy();
+
     lostItem.save(null, { useMasterKey : true });
     foundItem.save(null, { useMasterKey : true });
 }
@@ -134,10 +154,11 @@ async function setMatches(item) {
         query = new Parse.Query("LostItem");
     }
     
-    let results = await query.find({ useMasterKey : true });
+    let resultsPromise = query.find({ useMasterKey : true });
 
     let initialPossibleMatches = item.get(KEY_POSSIBLE_MATCHES);
     let possibleMatches = [];
+    let results = await resultsPromise;
 
     for(let i = 0; i < results.length; i++) {
         const otherItem = results[i];
@@ -160,8 +181,8 @@ async function setMatches(item) {
             let otherPossibleMatches = otherItem.get(KEY_POSSIBLE_MATCHES);
 
             await matchPromise;
-
             possibleMatches.push(match.id);
+
             if(!otherPossibleMatches.includes(match.id)) {
                 otherPossibleMatches.push(match.id);
             }
