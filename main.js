@@ -8,6 +8,8 @@ const KEY_TIME_LOST = "timeLost";
 const KEY_LOST_ITEM = "lostItem";
 const KEY_FOUND_ITEM = "foundItem";
 const KEY_DISTANCE_MILES = "distanceMiles";
+const KEY_LOST_BY = "lostBy";
+const KEY_FOUND_BY = "foundBY";
 
 const LostItem = Parse.Object.extend("LostItem");
 const FoundItem = Parse.Object.extend("FoundItem");
@@ -150,8 +152,10 @@ async function setMatches(item) {
     let query;
     if(item instanceof LostItem) {
         query = new Parse.Query("FoundItem");
+        query.notEqualTo(KEY_FOUND_BY, item.get(KEY_LOST_BY));
     } else if(item instanceof FoundItem) {
         query = new Parse.Query("LostItem");
+        query.notEqualTo(KEY_LOST_BY, item.get(KEY_FOUND_BY));
     }
     
     let resultsPromise = query.find({ useMasterKey : true });
@@ -166,7 +170,7 @@ async function setMatches(item) {
         let matchPromise = findMatch(item, otherItem);
         let similarity = checkItemMatch(item, otherItem);
         let match = await matchPromise;
-        
+
         if(similarity > 0.7) {
             if(item instanceof LostItem) {
                 match.set('lostItem', item);
@@ -177,7 +181,7 @@ async function setMatches(item) {
             }
             
             match.set('matchScore', similarity);
-            let distanceMiles = calculateDistanceMiles(lostItem, foundItem);
+            let distanceMiles = calculateDistanceMiles(item, otherItem);
             match.set(KEY_DISTANCE_MILES, distanceMiles);
 
             let matchPromise = match.save(null, { useMasterKey : true });
