@@ -84,18 +84,7 @@ function checkItemMatch(item, otherItem) {
     return NAME_SIMILARITY_WEIGHT * nameSimilarity + LOCATION_SIMILARITY_WEIGHT * locationSimilarity + TIME_SIMILARITY_WEIGHT * timeSimilarity;
 }
 
-async function findMatch(item, otherItem) {
-    let lostItem;
-    let foundItem;
-
-    if(item.className == 'LostItem') {
-        lostItem = item
-        foundItem = otherItem;
-    } else {
-        lostItem = otherItem;
-        foundItem = item;
-    }
-
+async function findMatch(lostItem, foundItem) {
     let matches = lostItem.get(KEY_POSSIBLE_MATCHES);
     for(let matchId of matches) {
         let match = new Match();
@@ -176,21 +165,31 @@ async function setMatches(item) {
     for(let i = 0; i < results.length; i++) {
         const otherItem = results[i];
 
-        let matchPromise = findMatch(item, otherItem);
-        let similarity = checkItemMatch(item, otherItem);
+        let lostItem;
+        let foundItem;
+        if(item.className == 'LostItem') {
+            lostItem = item;
+            foundItem = otherItem;
+        } else {
+            lostItem = otherItem;
+            foundItem = item;
+        }
+
+        if(foundItem.get(KEY_QUIZ_FAILS).includes(lostItem.get(KEY_LOST_BY).id)) {
+            console.log("User " + lostItem.get(KEY_LOST_BY).id + " already failed quiz, skipping match.");
+            continue;
+        }
+
+        let matchPromise = findMatch(lostItem, foundItem);
+        let similarity = checkItemMatch(lostItem, foundItem);
         let match = await matchPromise;
 
         if(similarity > 0.7) {
-            if(item instanceof LostItem) {
-                match.set('lostItem', item);
-                match.set('foundItem', otherItem);
-            } else if(item instanceof FoundItem) {
-                match.set('lostItem', otherItem);
-                match.set('foundItem', item);
-            }
+            match.set('lostItem', lostItem);
+            match.set('foundItem', foundItem);
             
             match.set('matchScore', similarity);
-            let distanceMiles = calculateDistanceMiles(item, otherItem);
+            let distanceMiles = calculateDistanceMiles(lostItem, foundItem);
             match.set(KEY_DISTANCE_MILES, distanceMiles);
 
             let matchPromise = match.save(null, { useMasterKey : true });
@@ -303,6 +302,7 @@ async function submitQuiz(request) {
         quizFails.push(request.user.id);
         foundItem.set(KEY_QUIZ_FAILS, quizFails);
         foundItem.save(null, { useMasterKey : true });
+        deleteMatch(match);
         return false;
     }
 }
