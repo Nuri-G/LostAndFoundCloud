@@ -9,7 +9,7 @@ const KEY_LOST_ITEM = "lostItem";
 const KEY_FOUND_ITEM = "foundItem";
 const KEY_DISTANCE_MILES = "distanceMiles";
 const KEY_LOST_BY = "lostBy";
-const KEY_FOUND_BY = "foundBY";
+const KEY_FOUND_BY = "foundBy";
 const KEY_ITEM_DETAILS = "itemDetails";
 const KEY_VERIFIED = "verified";
 const KEY_QUIZ_FAILS = "quizFails";
@@ -223,12 +223,10 @@ Parse.Cloud.define("updateMatches", async (request) => {
 
     if(request.params.hasOwnProperty('lostItemId')) {
         item = new LostItem(); 
-        let itemId = request.params.lostItemId;
-        item.id = itemId;
+        item.id = request.params.lostItemId;
     } else if(request.params.hasOwnProperty('foundItemId')) {
         item = new FoundItem();
-        let itemId = request.params.lostItemId;
-        item.id = itemId;
+        item.id = request.params.foundItemId;
     }
     
     try {
@@ -268,7 +266,7 @@ Parse.Cloud.beforeDelete("FoundItem", (request) => {
     });
 });
 
-async function validateQuiz(request) {
+async function submitQuiz(request) {
     let match = new Match();
     match.id = request.params.matchId;
     await match.fetch({ useMasterKey : true });
@@ -298,18 +296,20 @@ async function validateQuiz(request) {
         console.log("Quiz verified for match " + match.id)
         match.set(KEY_VERIFIED, true);
         match.save(null, { useMasterKey : true });
+        return true;
     } else {
         console.log("FAILED");
         let quizFails = foundItem.get(KEY_QUIZ_FAILS);
         quizFails.push(request.user.id);
         foundItem.set(KEY_QUIZ_FAILS, quizFails);
         foundItem.save(null, { useMasterKey : true });
+        return false;
     }
 }
 
 Parse.Cloud.define("submitQuiz", async (request) => {
     try {
-        await validateQuiz(request);
+        return await submitQuiz(request);
     } catch(error) {
         console.log("Error verifying quiz: " + error.message);
         console.log(error.stack)
