@@ -188,12 +188,9 @@ async function setMatches(item) {
     let possibleMatches = [];
     let results = await resultsPromise;
 
-    //Will store synonyms for all items in query.
-    let synonymPromises = [];
-    //Making requests for all synonyms since they will all be needed.
-    for(let i = 0; i < results.length; i++) {
-        synonymPromises.push(getSynonyms(item.get(KEY_ITEM_NAME)));
-    }
+    let synonyms = await getSynonyms(item.get(KEY_ITEM_NAME));
+
+    console.log("Synonyms are: " + JSON.stringify(synonyms));
 
     for(let i = 0; i < results.length; i++) {
         const otherItem = results[i];
@@ -214,7 +211,7 @@ async function setMatches(item) {
         }
 
         let matchPromise = findMatch(lostItem, foundItem);
-        let similarity = checkItemMatch(lostItem, foundItem, await synonymPromises[i]);
+        let similarity = checkItemMatch(item, otherItem, synonyms);
         let match = await matchPromise;
 
         if(similarity > 0.7) {
