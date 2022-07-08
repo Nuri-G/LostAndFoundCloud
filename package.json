@@ -1,6 +1,5 @@
 {
     "dependencies": {
         "fast-levenshtein": "3.0.0",
-        "dotenv": "16.0.1"
     }
 }
