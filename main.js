@@ -1,4 +1,5 @@
 const levenshtein = require('fast-levenshtein');
+const axios = require('axios');
 
 const KEY_ITEM_NAME = "itemName";
 const KEY_ITEM_LOCATION = "itemLocation";
@@ -35,14 +36,39 @@ function calculateLocationSimilarity(item, otherItem) {
     }
 }
 
-function calculateNameSimilarity(item, otherItem) {
-    let itemName = item.get(KEY_ITEM_NAME).toLowerCase();
+async function getSynonyms(word) {
+    const options = {
+        method: 'GET',
+        url: 'https://wordsapiv1.p.rapidapi.com/words/' + encodeURI(word) + '/synonyms',
+        headers: {
+            'X-RapidAPI-Key': process.env.THESAURUS_KEY,
+            'X-RapidAPI-Host': process.env.THESAURUS_HOST
+        }
+    };
+    let data = (await axios.request(options)).data;
+    if(data.success !== false) {
+        let synonyms = data.synonyms;
+        synonyms.push(word);
+        return synonyms;
+    }
+    return [word];
+}
+
+function calculateNameSimilarity(synonyms, otherItem) {
     let otherName = otherItem.get(KEY_ITEM_NAME).toLowerCase();
+    let maxSimilarity = 0;
 
-    let longerLength = Math.max(itemName.length, otherName.length);
-    let similarity = levenshtein.get(itemName, otherName);
+    for(let itemName of synonyms) {
+        let longerLength = Math.max(itemName.length, otherName.length);
+        let similarity = levenshtein.get(itemName, otherName);
+        let similarityProportion = (longerLength - similarity) / longerLength;
 
-    return (longerLength - similarity) / longerLength;
+        if(similarityProportion > maxSimilarity) {
+            maxSimilarity = similarityProportion;
+        }
+    }
+
+    return maxSimilarity;
 }
 
 function calculateTimeSimilarity(item, otherItem) {
@@ -72,12 +98,12 @@ function calculateTimeSimilarity(item, otherItem) {
     return 0;
 }
 
-function checkItemMatch(item, otherItem) {
+function checkItemMatch(item, otherItem, synonyms) {
     const NAME_SIMILARITY_WEIGHT = 0.4;
     const LOCATION_SIMILARITY_WEIGHT = 0.3;
     const TIME_SIMILARITY_WEIGHT = 0.3;
 
-    let nameSimilarity = calculateNameSimilarity(item, otherItem);
+    let nameSimilarity = calculateNameSimilarity(synonyms, otherItem);
     let locationSimilarity = calculateLocationSimilarity(item, otherItem);
     let timeSimilarity = calculateTimeSimilarity(item, otherItem);
 
@@ -162,6 +188,13 @@ async function setMatches(item) {
     let possibleMatches = [];
     let results = await resultsPromise;
 
+    //Will store synonyms for all items in query.
+    let synonymPromises = [];
+    //Making requests for all synonyms since they will all be needed.
+    for(let i = 0; i < results.length; i++) {
+        synonymPromises.push(getSynonyms(item.get(KEY_ITEM_NAME)));
+    }
+
     for(let i = 0; i < results.length; i++) {
         const otherItem = results[i];
 
@@ -181,7 +214,7 @@ async function setMatches(item) {
         }
 
         let matchPromise = findMatch(lostItem, foundItem);
-        let similarity = checkItemMatch(lostItem, foundItem);
+        let similarity = checkItemMatch(lostItem, foundItem, await synonymPromises[i]);
         let match = await matchPromise;
 
         if(similarity > 0.7) {
