@@ -173,6 +173,7 @@ async function deleteMatchFromId(matchId) {
 
 async function setMatches(item) {
     console.log("Setting matches for " + JSON.stringify(item));
+    let userIdsToNotify = [];
     let query;
     if(item instanceof LostItem) {
         query = new Parse.Query("FoundItem");
@@ -194,15 +195,18 @@ async function setMatches(item) {
 
     for(let i = 0; i < results.length; i++) {
         const otherItem = results[i];
+        let otherItemId = "";
 
         let lostItem;
         let foundItem;
         if(item.className == 'LostItem') {
             lostItem = item;
             foundItem = otherItem;
+            otherItemId = foundItem.get(KEY_FOUND_BY).id;
         } else {
             lostItem = otherItem;
             foundItem = item;
+            otherItemId = lostItem.get(KEY_LOST_BY).id;
         }
 
         if(foundItem.get(KEY_QUIZ_FAILS).includes(lostItem.get(KEY_LOST_BY).id)) {
@@ -215,6 +219,7 @@ async function setMatches(item) {
         let match = await matchPromise;
 
         if(similarity > 0.7) {
+            userIdsToNotify.push(otherItemId)
             match.set('lostItem', lostItem);
             match.set('foundItem', foundItem);
             
@@ -245,6 +250,17 @@ async function setMatches(item) {
     });
     item.set(KEY_POSSIBLE_MATCHES, possibleMatches);
     item.save(null, { useMasterKey : true });
+
+    let notificationQuery = new Parse.Query(Parse.Installation);
+    notificationQuery.containedIn('userId', userIdsToNotify);
+
+    Parse.Push.send({
+        where: notificationQuery,
+        data: {
+            title: "Matches Updated.",
+            alert: ""
+        }
+    }, { useMasterKey: true });
 }
 
 Parse.Cloud.define("updateMatches", async (request) => {
