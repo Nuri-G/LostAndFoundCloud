@@ -14,10 +14,32 @@ const KEY_FOUND_BY = "foundBy";
 const KEY_ITEM_DETAILS = "itemDetails";
 const KEY_VERIFIED = "verified";
 const KEY_QUIZ_FAILS = "quizFails";
+const KEY_MEETING_PLACES = "meetingPlaces";
 
 const LostItem = Parse.Object.extend("LostItem");
 const FoundItem = Parse.Object.extend("FoundItem");
 const Match = Parse.Object.extend("Match");
+
+async function findSafeLocation(geoPoint) {
+    let latitude = geoPoint.latitude;
+    let longitude = geoPoint.longitude;
+    let radiusMeters = 15000
+    let url = 'https://api.geoapify.com/v2/places?categories=service.police&filter=circle%3A' + longitude + '%2C' + latitude + '%2C' + radiusMeters + '&bias=proximity%3A' + longitude + '%2C' + latitude + '&limit=5' + '&apiKey=' + process.env.GEOAPIFY_KEY;
+    let options = {
+        method: 'GET',
+        url: url,
+        headers: { }
+    };
+
+    return (await axios.request(options)).data.features
+        .map(feature => {
+            return {
+                locationName: feature.properties.name,
+                address: feature.properties.formatted,
+                distance: feature.properties.distance
+            }
+        });
+}
 
 function calculateDistanceMiles(item, otherItem) {
     return item.get(KEY_ITEM_LOCATION).milesTo(otherItem.get(KEY_ITEM_LOCATION));
@@ -321,6 +343,10 @@ async function submitQuiz(request) {
     let foundItem = new FoundItem();
     foundItem.id = match.get(KEY_FOUND_ITEM).id;
     await foundItem.fetch({ useMasterKey : true });
+
+    let location = foundItem.get(KEY_ITEM_LOCATION);
+    let safeMeetingPromise = findSafeLocation(location);
+
     let answers = foundItem.get(KEY_ITEM_DETAILS);
 
     console.log("ANSWERS: " + JSON.stringify(answers));
@@ -340,6 +366,7 @@ async function submitQuiz(request) {
     if(scoreProportion > 0.7) {
         console.log("Quiz verified for match " + match.id)
         match.set(KEY_VERIFIED, true);
+        match.set(KEY_MEETING_PLACES, await safeMeetingPromise)
         match.save(null, { useMasterKey : true });
         return true;
     } else {
