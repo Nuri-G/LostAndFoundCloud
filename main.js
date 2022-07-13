@@ -47,7 +47,7 @@ function calculateDistanceMiles(item, otherItem) {
 
 //Returns value from 0 to 1 depending on how close to 0 the distance is.
 function calculateLocationSimilarity(item, otherItem) {
-    const MAX_DISTANCE = 50.0;
+    const MAX_DISTANCE = 20.0;
 
     let distanceMi = calculateDistanceMiles(item, otherItem);
 
