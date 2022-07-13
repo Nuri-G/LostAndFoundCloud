@@ -8,7 +8,7 @@ async function findSafeLocation(geoPoint) {
     let latitude = geoPoint.latitude;
     let longitude = geoPoint.longitude;
     let radiusMeters = 15000
-    let url = 'https://api.geoapify.com/v2/places?categories=service.police&filter=circle%3A' + longitude + '%2C' + latitude + '%2C' + radiusMeters + '&bias=proximity%3A' + longitude + '%2C' + latitude + '&limit=5' + '&apiKey=' + process.env.GEOAPIFY_KEY;
+    let url = 'https://api.geoapify.com/v2/places?categories=service.police&filter=circle%3A' + longitude + '%2C' + latitude + '%2C' + radiusMeters + '&bias=proximity%3A' + longitude + '%2C' + latitude + '&limit=10' + '&apiKey=' + process.env.GEOAPIFY_KEY;
     let options = {
         method: 'GET',
         url: url,

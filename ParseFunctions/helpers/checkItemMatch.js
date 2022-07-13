@@ -26,13 +26,18 @@ async function getSynonyms(word) {
             'X-RapidAPI-Host': process.env.THESAURUS_HOST
         }
     };
-    let data = (await axios.request(options)).data;
-    if(data.success !== false) {
-        let synonyms = data.synonyms;
-        synonyms.push(word);
-        console.log("Synonyms are: " + JSON.stringify(synonyms));
-        return synonyms;
+    try {
+        let data = (await axios.request(options)).data;
+        if(data.success !== false) {
+            let synonyms = data.synonyms;
+            synonyms.push(word);
+            console.log("Synonyms are: " + JSON.stringify(synonyms));
+            return synonyms;
+        }
+    } catch {
+        console.log("Failed to fetch synonyms.");
     }
+    
     return [word];
 }
 
