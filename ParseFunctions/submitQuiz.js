@@ -1,5 +1,6 @@
 const axios = require('axios');
 const constants = require('./helpers/constants');
+const deleteMatch = require('./helpers/deleteMatch');
 
 const FoundItem = Parse.Object.extend("FoundItem");
 const Match = Parse.Object.extend("Match");
