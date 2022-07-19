@@ -36,7 +36,6 @@ async function submitQuiz(request) {
     await foundItem.fetch({ useMasterKey : true });
 
     let location = foundItem.get(constants.KEY_ITEM_LOCATION);
-    let safeMeetingPromise = findSafeLocation(location);
 
     let answers = foundItem.get(constants.KEY_ITEM_DETAILS);
 
@@ -54,8 +53,9 @@ async function submitQuiz(request) {
 
     if(scoreProportion > 0.7) {
         console.log("Quiz verified for match " + match.id)
+        let safeMeetingPlaces = findSafeLocation(location);
         match.set(constants.KEY_VERIFIED, true);
-        match.set(constants.KEY_MEETING_PLACES, await safeMeetingPromise)
+        match.set(constants.KEY_MEETING_PLACES, await safeMeetingPlaces)
         match.save(null, { useMasterKey : true });
         return true;
     } else {
