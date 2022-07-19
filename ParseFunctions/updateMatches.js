@@ -33,6 +33,55 @@ async function deleteMatchFromId(matchId) {
     }
 }
 
+async function checkMatch(item, otherItem, userIdsToNotify) {
+    let otherItemId = "";
+
+    let lostItem;
+    let foundItem;
+    if(item.className == 'LostItem') {
+        lostItem = item;
+        foundItem = otherItem;
+        otherItemId = foundItem.get(constants.KEY_FOUND_BY).id;
+    } else {
+        lostItem = otherItem;
+        foundItem = item;
+        otherItemId = lostItem.get(constants.KEY_LOST_BY).id;
+    }
+
+    if(foundItem.get(constants.KEY_QUIZ_FAILS).includes(lostItem.get(constants.KEY_LOST_BY).id)) {
+        console.log("User " + lostItem.get(constants.KEY_LOST_BY).id + " already failed quiz, skipping match.");
+        return;
+    }
+
+    let matchPromise = findMatch(lostItem, foundItem);
+    let similarity = await checkItemMatch(item, otherItem);
+    let match = await matchPromise;
+
+    if(similarity > 0.7) {
+        userIdsToNotify.push(otherItemId)
+        match.set('lostItem', lostItem);
+        match.set('foundItem', foundItem);
+        
+        match.set('matchScore', similarity);
+        let distanceMiles = lostItem.get(constants.KEY_ITEM_LOCATION).milesTo(foundItem.get(constants.KEY_ITEM_LOCATION));
+        match.set(constants.KEY_DISTANCE_MILES, distanceMiles);
+
+        let matchPromise = match.save(null, { useMasterKey : true });
+
+        let otherPossibleMatches = otherItem.get(constants.KEY_POSSIBLE_MATCHES);
+
+        await matchPromise;
+
+        if(!otherPossibleMatches.includes(match.id)) {
+            otherPossibleMatches.push(match.id);
+        }
+
+        otherItem.set(constants.KEY_POSSIBLE_MATCHES, otherPossibleMatches);
+        otherItem.save(null, { useMasterKey : true });
+        return match.id;
+    }
+}
+
 async function setMatches(item) {
     console.log("Setting matches for " + JSON.stringify(item));
     let userIdsToNotify = [];
@@ -45,61 +94,17 @@ async function setMatches(item) {
         query.notEqualTo(constants.KEY_LOST_BY, item.get(constants.KEY_FOUND_BY));
     }
     
-    let resultsPromise = query.find({ useMasterKey : true });
+    let results = query.find({ useMasterKey : true });
 
     let initialPossibleMatches = item.get(constants.KEY_POSSIBLE_MATCHES);
     let possibleMatches = [];
-    let results = await resultsPromise;
+    results = await results;
 
     for(let i = 0; i < results.length; i++) {
-        const otherItem = results[i];
-        let otherItemId = "";
-
-        let lostItem;
-        let foundItem;
-        if(item.className == 'LostItem') {
-            lostItem = item;
-            foundItem = otherItem;
-            otherItemId = foundItem.get(constants.KEY_FOUND_BY).id;
-        } else {
-            lostItem = otherItem;
-            foundItem = item;
-            otherItemId = lostItem.get(constants.KEY_LOST_BY).id;
-        }
-
-        if(foundItem.get(constants.KEY_QUIZ_FAILS).includes(lostItem.get(constants.KEY_LOST_BY).id)) {
-            console.log("User " + lostItem.get(constants.KEY_LOST_BY).id + " already failed quiz, skipping match.");
-            continue;
-        }
-
-        let matchPromise = findMatch(lostItem, foundItem);
-        let similarity = await checkItemMatch(item, otherItem);
-        let match = await matchPromise;
-
-        if(similarity > 0.7) {
-            userIdsToNotify.push(otherItemId)
-            match.set('lostItem', lostItem);
-            match.set('foundItem', foundItem);
-            
-            match.set('matchScore', similarity);
-            let distanceMiles = lostItem.get(constants.KEY_ITEM_LOCATION).milesTo(foundItem.get(constants.KEY_ITEM_LOCATION));
-            match.set(constants.KEY_DISTANCE_MILES, distanceMiles);
-
-            let matchPromise = match.save(null, { useMasterKey : true });
-
-            let otherPossibleMatches = otherItem.get(constants.KEY_POSSIBLE_MATCHES);
-
-            await matchPromise;
-            possibleMatches.push(match.id);
-
-            if(!otherPossibleMatches.includes(match.id)) {
-                otherPossibleMatches.push(match.id);
-            }
-
-            otherItem.set(constants.KEY_POSSIBLE_MATCHES, otherPossibleMatches);
-            otherItem.save(null, { useMasterKey : true });
-        }
+        possibleMatches.push(checkMatch(item, results[i], userIdsToNotify));
     }
+
+    possibleMatches = (await Promise.all(possibleMatches)).filter(matchId => matchId != null);
 
     initialPossibleMatches.forEach(matchId => {
         if(!possibleMatches.includes(matchId)) {
