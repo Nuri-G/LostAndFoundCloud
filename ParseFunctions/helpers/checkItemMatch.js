@@ -8,7 +8,7 @@ const constants = require('./constants');
 function calculateLocationSimilarity(item, otherItem) {
     const MAX_DISTANCE = 20.0;
 
-    let distanceMi = item.get(constants.KEY_ITEM_LOCATION).milesTo(otherItem.get(constants.KEY_ITEM_LOCATION));;
+    let distanceMi = item.get(constants.KEY_ITEM_LOCATION).milesTo(otherItem.get(constants.KEY_ITEM_LOCATION));
 
     if(distanceMi > MAX_DISTANCE) {
         return 0;
