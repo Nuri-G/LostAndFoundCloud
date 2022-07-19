@@ -31,8 +31,6 @@ async function submitQuiz(request) {
     match.id = request.params.matchId;
     await match.fetch({ useMasterKey : true });
 
-    console.log("MATCH IS " + JSON.stringify(match));
-
     let foundItem = new FoundItem();
     foundItem.id = match.get(constants.KEY_FOUND_ITEM).id;
     await foundItem.fetch({ useMasterKey : true });
@@ -41,8 +39,6 @@ async function submitQuiz(request) {
     let safeMeetingPromise = findSafeLocation(location);
 
     let answers = foundItem.get(constants.KEY_ITEM_DETAILS);
-
-    console.log("ANSWERS: " + JSON.stringify(answers));
 
     let totalScore = 0;
     let itemCount = 0;
@@ -63,7 +59,7 @@ async function submitQuiz(request) {
         match.save(null, { useMasterKey : true });
         return true;
     } else {
-        console.log("FAILED");
+        console.log("Quiz verification failed for match " + match.id);
         let quizFails = foundItem.get(constants.KEY_QUIZ_FAILS);
         quizFails.push(request.user.id);
         foundItem.set(constants.KEY_QUIZ_FAILS, quizFails);
