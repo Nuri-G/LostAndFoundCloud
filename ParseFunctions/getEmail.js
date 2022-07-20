@@ -21,20 +21,16 @@ async function getEmail(request) {
     let foundItemPromise = foundItem.fetch({ useMasterKey: true });
     await lostItemPromise;
     await foundItemPromise;
+    let res;
     if(request.user.id === lostItem.get(constants.KEY_LOST_BY).id) {
-        const res = await new Parse.Query("User").equalTo("objectId", foundItem.get(constants.KEY_FOUND_BY).id).find({ useMasterKey: true });
-        if(res){
-            const user = res[0];
-            console.log("Email is: " + user.get("email"));
-            return user.get("email");
-        }
+        res = await new Parse.Query("User").equalTo("objectId", foundItem.get(constants.KEY_FOUND_BY).id).find({ useMasterKey: true });
     } else if(request.user.id === foundItem.get(constants.KEY_FOUND_BY).id) {
-        const res = await new Parse.Query("User").equalTo("objectId", lostItem.get(constants.KEY_LOST_BY).id).find({ useMasterKey: true });
-        if(res){
-            const user = res[0];
-            console.log("Email is: " + user.get("email"));
-            return user.get("email");
-        }
+        res = await new Parse.Query("User").equalTo("objectId", lostItem.get(constants.KEY_LOST_BY).id).find({ useMasterKey: true });
+    }
+    if(res){
+        const user = res[0];
+        console.log("Email is: " + user.get("email"));
+        return user.get("email");
     }
     return "";
 }
